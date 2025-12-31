@@ -5,7 +5,7 @@ function isEmail(value) {
 }
 
 function isPassValid(value) {
-    return value && value.length >= 6;
+    return value && value.length >= 5;
 }
 
 function isConfirmPass(confirm, pass) {

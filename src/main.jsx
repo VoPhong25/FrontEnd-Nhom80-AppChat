@@ -4,13 +4,23 @@ import './index.css'
 import App from './App.jsx'
 import {BrowserRouter} from "react-router-dom";
 import {Provider} from "react-redux";
-import store from "./redux/Store";
+import {store, persistor} from "./redux/Store";
+import {ChakraProvider} from '@chakra-ui/react'
+import WebSocketProvider from "./socket/WebSocketProvider.jsx";
+import {PersistGate} from "redux-persist/integration/react";
+
 createRoot(document.getElementById('root')).render(
     <StrictMode>
         <BrowserRouter>
-            <Provider store={store}>
-                <App />
-            </Provider>
+            <ChakraProvider resetCSS={false}>
+                <WebSocketProvider>
+                    <Provider store={store}>
+                        <PersistGate persistor={persistor}>
+                            <App/>
+                        </PersistGate>
+                    </Provider>
+                </WebSocketProvider>
+            </ChakraProvider>
         </BrowserRouter>
     </StrictMode>,
 )

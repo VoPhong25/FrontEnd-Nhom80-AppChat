@@ -1,27 +1,69 @@
 import "../login/Login.css";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useContext, useEffect } from "react";
+
 import {
     isPassValid,
     isConfirmPass,
     isNotEmpty,
 } from "../../validate/checkInput";
 
+import { WebSocketContext } from "../../socket/WebSocketContext";
+import { REGISTER } from "../../api/action";
+import {useToast} from "@chakra-ui/react";
+
+
 const Signup = () => {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [error, setError] = useState("");
+    const toast = useToast();
 
     const navigate = useNavigate();
-    const handleNavigate = () => navigate("/")
+    const [hasSubmitted, setHasSubmitted] = useState(false);
 
+
+    // lấy dữ liệu từ WebSocket
+    const { isReady, messages, sendJsonMessage } =
+        useContext(WebSocketContext);
+
+    const handleNavigate = () => navigate("/");
+
+    useEffect(() => {
+        if (!hasSubmitted) return;
+        if (!messages.length) return;
+
+        const lastMsg = messages[messages.length - 1];
+
+        if (lastMsg.event !== "REGISTER") return;
+
+        if (lastMsg.status === "success") {
+            toast({
+                title: "Đăng ký thành công!",
+                description: "Bạn đã đăng ký tài khoản thành công.",
+                status: "success",
+                duration: 6000,
+                isClosable: true
+            });
+
+            setHasSubmitted(false);
+            setTimeout(() => navigate("/"), 1500);
+        } else {
+            toast({
+                title: "Đăng ký thất bại!",
+                description: "Tên đăng nhập đã tồn tại.",
+                status: "error",
+                duration: 6000,
+                isClosable: true
+            });
+            setHasSubmitted(false);
+        }
+    }, [messages, hasSubmitted]);
     const handleSubmit = (e) => {
-        console.log("SUBMIT CLICKED");
-
         e.preventDefault();
         setError("");
-
+        console.log("websocket", isReady)
         if (!isNotEmpty(username)) {
             setError("Vui lòng nhập tên đăng nhập");
             return;
@@ -31,16 +73,17 @@ const Signup = () => {
             setError("Mật khẩu phải có ít nhất 6 ký tự");
             return;
         }
-
         if (!isConfirmPass(confirmPassword, password)) {
             setError("Mật khẩu nhập lại không khớp");
             return;
         }
-
-        // TODO: xử lý gọi api đăng ký
+        if (!isReady) {
+            setError("WebSocket chưa sẵn sàng, vui lòng thử lại");
+            return;
+        }
+        setHasSubmitted(true);
+        sendJsonMessage(REGISTER(username, password));
     };
-
-
 
     return (
         <div className="login-container">
@@ -84,8 +127,15 @@ const Signup = () => {
 
                 <button type="submit">Đăng ký</button>
 
-                <p className="mt-3">Bạn đã có tài khoản?  <span onClick={handleNavigate} className='ml-2  text-blue-600 cursor-pointer'>Đăng nhập</span></p>
-
+                <p className="mt-3">
+                    Bạn đã có tài khoản?
+                    <span
+                        onClick={handleNavigate}
+                        className="ml-2 text-blue-600 cursor-pointer"
+                    >
+                        Đăng nhập
+                    </span>
+                </p>
             </form>
         </div>
     );

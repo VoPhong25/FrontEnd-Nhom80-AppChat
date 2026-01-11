@@ -5,7 +5,7 @@ import { useDispatch } from "react-redux";
 import { useToast } from "@chakra-ui/react";
 
 import { WebSocketContext } from "../../socket/WebSocketContext";
-import {LOGIN } from "../../api/action";
+import {LOGIN, GET_USER_LIST } from "../../api/action";
 import { setUser } from "../../redux/userSlice";
 import {isNotEmpty, isPassValid} from "../../validate/checkInput";
 
@@ -44,7 +44,7 @@ const Login = () => {
                 status: "success",
                 duration: 2000,
             });
-
+            sendJsonMessage(GET_USER_LIST())
             setHasSubmitted(false);
             navigate("/home");
         } else {

@@ -10,16 +10,6 @@ function WebSocketProvider({ children }) {
     const { sendJsonMessage, lastJsonMessage } = useWebSocket("wss://chat.longapp.site/chat/chat", {
         onOpen: () => {
             setIsReady(true);
-
-            // const username = localStorage.getItem("USERNAME");
-            //
-            // // code dùng để relogin khi mất kết nối
-            // const code = localStorage.getItem("RE_LOGIN_CODE");
-            //
-            // if (username && code) {
-            //     sendJsonMessage(RE_LOGIN(username, code));
-            // }
-
             console.log("WebSocket connected");
         },
         onClose: () => {
@@ -27,8 +17,6 @@ function WebSocketProvider({ children }) {
             console.log("WebSocket disconnected");
         },
     });
-
-
     useEffect(() => {
         if (lastJsonMessage) {
             // eslint-disable-next-line react-hooks/set-state-in-effect

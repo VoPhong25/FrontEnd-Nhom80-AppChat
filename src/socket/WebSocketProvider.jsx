@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { WebSocketContext } from "./WebSocketContext";
 import useWebSocket from "react-use-websocket";
-import {RE_LOGIN} from "../api/action.js";
 
 function WebSocketProvider({ children }) {
     const [isReady, setIsReady] = useState(false);
@@ -17,6 +16,8 @@ function WebSocketProvider({ children }) {
             console.log("WebSocket disconnected");
         },
     });
+
+
     useEffect(() => {
         if (lastJsonMessage) {
             // eslint-disable-next-line react-hooks/set-state-in-effect

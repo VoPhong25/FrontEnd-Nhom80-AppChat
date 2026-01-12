@@ -58,8 +58,17 @@ const userSlice = createSlice({
         },
 
         setGroups(state, action) {
-            const { name, type = 1, actionTime = "" } = action.payload.item;
-            if (state.infor.groups.some(g => g.nameGroup === name)) return;
+        
+            if (!state.infor) state.infor = { name: "", email: "", friends: [], groups: [] };
+            if (!Array.isArray(state.infor.groups)) state.infor.groups = [];
+
+            const item = action && action.payload && action.payload.item;
+            if (!item) return;
+
+            const { name, type = 1, actionTime = "" } = item;
+            if (!name) return;
+
+            if (state.infor.groups.some((g) => g.nameGroup === name)) return;
 
             state.infor.groups.push({
                 nameGroup: name,

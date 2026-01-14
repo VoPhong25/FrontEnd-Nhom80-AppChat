@@ -34,8 +34,8 @@ const Chat = ({ friend }, ref) => {
     const currentFriend = friends.find(
         (f) => f.name === friend.name
     );
-    console.log("nguoi nhận: ", currentFriend)
-    console.log("friend : ", friend)
+    // console.log("nguoi nhận: ", currentFriend)
+    // console.log("friend : ", friend)
 
     const messages = [...(currentFriend?.listmessage || [])].sort(
         (a, b) => new Date(a.time) - new Date(b.time)
@@ -96,7 +96,6 @@ const Chat = ({ friend }, ref) => {
 
     return (
         <div className="chatContainer">
-            {/* HEADER */}
             <div className="header">
                 <div className="item">
                     <div className="img">
@@ -120,7 +119,6 @@ const Chat = ({ friend }, ref) => {
                 </div>
             </div>
 
-            {/* BODY */}
             <div className="main">
                 {messages.map((m, i) => {
                     const prevMessage = messages[i - 1];

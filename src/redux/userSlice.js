@@ -64,6 +64,7 @@ const userSlice = createSlice({
 
             friend.listmessage.push(newMessage);
             friend.lastMessage = newMessage;
+            friend.actionTime = newMessage.time;
 
             if (isHistory) return;
             //đưa ngươi đang nhăn lên đàu danh sách
@@ -73,7 +74,7 @@ const userSlice = createSlice({
 
         setGroups(state, action) {
 
-            if (!state.infor) state.infor = { name: "", email: "", friends: [], groups: [] };
+            if (!state.infor) state.infor = { name: "", friends: [], groups: [] };
             if (!Array.isArray(state.infor.groups)) state.infor.groups = [];
 
             const item = action && action.payload && action.payload.item;
@@ -94,35 +95,31 @@ const userSlice = createSlice({
         },
 
         saveGroupMess(state, action) {
-            const { nameGroup, messGroup } = action.payload;
-            const group = state.infor.groups.find(g => g.nameGroup === nameGroup);
-            if (!group) return;
-            // dedupe: avoid pushing duplicate messages (same text + sender + recent time)
-            const msgTime = messGroup.createdAt || messGroup.time || new Date().toISOString();
-            let exists = false;
-            try {
-                exists = (group.listmessage || []).some(m => {
-                    const t1 = new Date(m.time || 0).getTime();
-                    const t2 = new Date(msgTime).getTime();
-                    const sameText = m.text === messGroup.text;
-                    const sameSender = m.sender === messGroup.sender;
-                    const closeTime = Math.abs(t1 - t2) < 5000; // within 5 seconds
-                    return sameText && sameSender && closeTime;
-                });
-            } catch (e) {
-                exists = false;
-            }
-            if (!exists) {
-                const newMessage = {
-                    text: messGroup.text,
-                    sender: messGroup.sender,
-                    isSentByUser: !!messGroup.isSentByUser,
-                    time: msgTime,
-                };
-                group.listmessage.push(newMessage);
-                group.lastMessage = newMessage;
-            }
+            const { nameGroup, messGroup, isHistory } = action.payload;
+            const groups = state.infor.groups;
+            const index = groups.findIndex(g => g.nameGroup === nameGroup);
+            if (index === -1) return;
+
+            const group = groups[index];
+
+            const newMessage = {
+                text: messGroup.text,
+                sender: messGroup.sender,
+                isSentByUser: messGroup.sender === state.infor.name,
+                time: messGroup.createdAt,
+            };
+
+            group.listmessage.push(newMessage);
+            group.lastMessage = newMessage;
+            group.actionTime = newMessage.time;
+
+            if (isHistory) return;
+
+            // đưa group lên đầu list
+            groups.splice(index, 1);
+            groups.unshift(group);
         },
+
 
         clearMessages(state, action) {
             const { name } = action.payload;
@@ -130,9 +127,21 @@ const userSlice = createSlice({
             if (!friend) return;
 
             friend.listmessage = [];
-        }
+        },
+        clearGroupMessages(state, action) {
+            const { nameGroup } = action.payload;
+            const group = state.infor.groups.find(g => g.nameGroup === nameGroup);
+            if (!group) return;
 
-
+            group.listmessage = [];
+        },
+        checkOnline: (state, action) => {
+            const { user, status } = action.payload;
+            const friend = state.infor.friends.find(f => f.name === user);
+            if (friend) {
+                friend.isOnline = status;
+            }
+        },
     },
 });
 
@@ -143,7 +152,9 @@ export const {
     setGroups,
     saveMessage,
     saveGroupMess,
-    clearMessages
+    clearMessages,
+    clearGroupMessages,
+    checkOnline
 } = userSlice.actions;
 
 export default userSlice.reducer;

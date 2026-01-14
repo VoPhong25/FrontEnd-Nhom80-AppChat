@@ -1,10 +1,10 @@
 import React from "react";
 import "./Friend.css";
 
-const Friend = ({ img, name, time, message, unread,isActive, onClick }) => {
+const Friend = ({name, time, lastMessage, isActive, onClick }) => {
     return (
         <div
-            className={`friend ${unread > 0 ? "unread" : ""} ${isActive ? "active" : ""}`}
+            className={`friend ${isActive ? "active" : ""}`}
             onClick={onClick}
         >
             <div className="friendItem">
@@ -18,8 +18,7 @@ const Friend = ({ img, name, time, message, unread,isActive, onClick }) => {
                             <span>{time}</span>
                         </div>
                         <div className="text">
-                            <span>{message}</span>
-                            {unread > 0 && <div className="unread">{unread}</div>}
+                            <span>{lastMessage}</span>
                         </div>
                     </div>
                 </div>

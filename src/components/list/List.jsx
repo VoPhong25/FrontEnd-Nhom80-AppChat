@@ -92,7 +92,7 @@ const List = ({ setChatUser, selectedUser }) => {
                         text: mes,
                         sender: name,
                         isSentByUser,
-                        createAt,
+                        createAt
                     },
                     isHistory: true
                 })
@@ -101,15 +101,21 @@ const List = ({ setChatUser, selectedUser }) => {
     };
 
     const handleGetRoomChatMes = (payload) => {
-        payload.data.chatData.forEach(({ name, mes, createAt }) => {
+
+        const myId = infor.name || infor.email;
+        const data = (payload && (payload.data || payload)) || {};
+        const chatData = data.chatData || (data.data && data.data.chatData) || [];
+        const roomName = data.name || (data.data && data.data.name) || null;
+        if (!Array.isArray(chatData)) return;
+        chatData.forEach(({ name, mes, createAt, createdAt }) => {
             dispatch(
                 saveGroupMess({
-                    nameGroup: payload.data.name,
+                    nameGroup: roomName,
                     messGroup: {
                         text: mes,
                         sender: name,
-                        isSentByUser: name === infor.name,
-                        createAt,
+                        isSentByUser: name === myId,
+                        createdAt: createAt || createdAt,
                     },
                     //ktra xem là nhăn tin hay đang render
                     isHistory: true
@@ -123,13 +129,16 @@ const List = ({ setChatUser, selectedUser }) => {
 
         const currentIndex = messages.length - 1;
 
-        //tranh xu ly 1 message nhiều làm
+
         if (currentIndex === lastIndexRef.current) return;
 
         lastIndexRef.current = currentIndex;
-        const payload = messages[currentIndex];
+        const raw = messages[currentIndex];
 
-        if (payload.status !== "success") return;
+
+        const evt = raw.event || (raw.data && raw.data.event) || (raw.action && raw.action.event);
+        const status = raw.status || (raw.data && raw.data.status) || null;
+        const payload = raw.data ? (raw.data.data || raw.data) : raw;
 
         switch (payload.event) {
             case "GET_PEOPLE_CHAT_MES":
@@ -141,6 +150,26 @@ const List = ({ setChatUser, selectedUser }) => {
                 break;
             default:
                 break;
+        if (status && status !== "success") return;
+
+        if (!evt) return;
+
+        if (evt === "GET_PEOPLE_CHAT_MES") {
+            handleGetPeopleChatMes(payload);
+        } else if (evt === "GET_ROOM_CHAT_MES") {
+            handleGetRoomChatMes(payload);
+        } else if (evt === "SEND_CHAT") {
+
+            const d = (payload && (payload.data || payload)) || payload;
+            const type = d.type || (d.data && d.data.type) || null;
+            if (type === "room") {
+                handleSendChatToRoom({ data: d });
+            } else {
+                handleSendChat({ data: d });
+            }
+        } else if (evt === "SEND_CHAT_TO_ROOM") {
+
+            handleSendChatToRoom(payload);
         }
     }, [messages]);
 
@@ -150,7 +179,7 @@ const List = ({ setChatUser, selectedUser }) => {
         // if(friend) return friend;
         setSearchValue("");
     };
-    // xu li nhập tên nhóm để vào
+
     const joinGroup = () => {
         if (!isReady) {
             toast({ title: "WebSocket chưa sẵn sàng", status: "error", duration: 3000 });

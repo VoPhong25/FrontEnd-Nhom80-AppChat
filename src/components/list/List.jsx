@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState, useRef } from "react";
+import { useToast } from "@chakra-ui/react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
 import { LogOut } from "lucide-react";
@@ -34,6 +35,7 @@ const List = ({ setChatUser, selectedUser }) => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
     const lastIndexRef = useRef(-1);
+    const toast = useToast();
 
     const user = useSelector((state) => state.user || {});
     const infor = user.infor || {};
@@ -45,6 +47,7 @@ const List = ({ setChatUser, selectedUser }) => {
     console.log("list user, groud: ", all)
 
     const [searchValue, setSearchValue] = useState("");
+    const [expandedGroup, setExpandedGroup] = useState(null);
 
     //louot
     const handleLogout = () => {
@@ -57,8 +60,10 @@ const List = ({ setChatUser, selectedUser }) => {
     const handleItemClick = (item) => {
         if (item.type === 0) {
             sendJsonMessage(GET_PEOPLE_CHAT_MES(item.name));
+            setExpandedGroup(null);
         } else {
             sendJsonMessage(GET_ROOM_CHAT_MES(item.nameGroup));
+            setExpandedGroup(item.nameGroup);
         }
         setChatUser(item);
     };
@@ -148,15 +153,29 @@ const List = ({ setChatUser, selectedUser }) => {
         sendJsonMessage(SEND_CHAT(searchValue, "add friend"));
         setSearchValue("");
     };
-
+    // xu li nhập tên nhóm để vào
     const joinGroup = () => {
-        // làm tiếp vào đây
-        // TODO
-    };
+        if (!isReady) {
+            toast({ title: "WebSocket chưa sẵn sàng", status: "error", duration: 3000 });
+            return;
+        }
+        const room = window.prompt("Nhập tên nhóm để vào:");
+        if (!room) return;
 
+        setChatUser({ nameGroup: room, type: 1 });
+
+        sendJsonMessage(JOIN_ROOM(room));
+    };
+    // xu li nhập tên nhóm để tạo
     const createGroup = () => {
-        // làm tiếp vào đây
-        // TODO
+        if (!isReady) {
+                toast({ title: "WebSocket chưa sẵn sàng", status: "error", duration: 3000 });
+            return;
+        }
+        const room = window.prompt("Nhập tên nhóm để tạo:");
+        if (!room) return;
+        setChatUser({ nameGroup: room, type: 1 });
+        sendJsonMessage(CREATE_ROOM(room));
     };
 
     return (
@@ -183,7 +202,8 @@ const List = ({ setChatUser, selectedUser }) => {
             <div className="allbtn">
                 <button onClick={findFriend}>Tìm bạn</button>
                 <button onClick={joinGroup}>Vào nhóm</button>
-                <button onClick={createGroup}>Tạo nhóm</button>
+                        <button onClick={createGroup}>Tạo nhóm</button>
+
             </div>
 
 
@@ -214,21 +234,46 @@ const List = ({ setChatUser, selectedUser }) => {
                             />
 
                         ) : (
-                            <ShowGroup
-                                key={`group-${item.nameGroup}`}
-                                nameGroup={item.nameGroup}
-                                lastMessage={
-                                    item.lastMessage
-                                        ? `${item.lastMessage.sender}: ${item.lastMessage.text}`
-                                        : ""
-                                }
-                                time={item.lastMessage?.time}
-                                isActive={
-                                    selectedUser?.type === 1 &&
-                                    selectedUser?.nameGroup === item.nameGroup
-                                }
-                                onClick={() => handleItemClick(item)}
-                            />
+                            <div key={`group-wrap-${item.nameGroup}`}>
+                                <ShowGroup
+                                    key={`group-${item.nameGroup}`}
+                                    nameGroup={item.nameGroup}
+                                    lastMessage={
+                                        item.lastMessage
+                                            ? `${item.lastMessage.sender}: ${item.lastMessage.text}`
+                                            : ""
+                                    }
+                                    time={item.lastMessage?.time}
+                                    isActive={
+                                        selectedUser?.type === 1 &&
+                                        selectedUser?.nameGroup === item.nameGroup
+                                    }
+                                    onClick={() => handleItemClick(item)}
+                                />
+                                {/* Hien thi danh sach thanh vien co trong nhom */}
+                                {expandedGroup === item.nameGroup && (
+                                    <div className="group-members">
+                                        {(() => {
+                                            const groupObj = groups.find((g) => g.nameGroup === item.nameGroup) || { listmessage: [] };
+                                            const members = Array.from(new Set((groupObj.listmessage || []).map((m) => m.sender))).filter(Boolean);
+                                            if (!members.length) {
+                                                return (
+                                                    <div className="member-empty">
+                                                        <div>No members yet</div>
+
+                                                    </div>
+                                                );
+                                            }
+                                            return members.map((m) => (
+                                                <div key={`member-${m}`} className="member-item">
+                                                    <div className="member-avatar" />
+                                                    <div className="member-name">{m}</div>
+                                                </div>
+                                            ));
+                                        })()}
+                                    </div>
+                                )}
+                            </div>
 
                         )
                     )}

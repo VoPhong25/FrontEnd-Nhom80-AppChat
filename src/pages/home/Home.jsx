@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useToast } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
 
 import { WebSocketContext } from "../../socket/WebSocketContext";
@@ -13,6 +14,7 @@ import "./Home.css";
 function Home() {
     const { isReady, messages, sendJsonMessage } = useContext(WebSocketContext);
     const dispatch = useDispatch();
+    const toast = useToast();
     const navigate = useNavigate();
 
     const user = useSelector((state) => state.user);
@@ -50,7 +52,7 @@ function Home() {
                 break;
             case "CREATE_ROOM":
             case "JOIN_ROOM":
-                handleCreateOrJoinRoom(payload.data);
+                handleCreateOrJoinRoom(payload.data, payload.status);
                 break;
 
             default:
@@ -62,9 +64,10 @@ function Home() {
     const handleErrorEvent = (payload) => {
         switch (payload.event) {
             case "JOIN_ROOM":
-                alert("Room không tồn tại");
+                toast({ title: "Join room failed", description: payload.message || "Room không tồn tại", status: "error", duration: 5000 });
                 break;
             default:
+                toast({ title: payload.event || "Error", description: payload.message || "Unknown error", status: "error", duration: 4000 });
                 break;
         }
     };
@@ -78,9 +81,20 @@ function Home() {
             }
         });
     };
+    //xử lý khi tạo hoặc tham gia phòng
+    const handleCreateOrJoinRoom = (data, status) => {
+        
+        if (!data) return;
+        const name = data.name || data.room || data.nameGroup;
+        if (!name) return;
 
-    const handleCreateOrJoinRoom = (data) => {
-       // TODO ??
+        if (status === "success") {
+            // Add to redux store if not exists
+            dispatch(setGroups({ item: { name } }));
+            toast({ title: `Room ${name} updated`, status: "success", duration: 3000 });
+        } else if (status === "error") {
+            toast({ title: `Room action failed`, description: data.message || "unknown error", status: "error", duration: 5000 });
+        }
     };
 
     //xoa chat cu khi chọn người mới

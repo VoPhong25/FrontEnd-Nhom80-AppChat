@@ -13,13 +13,13 @@ createRoot(document.getElementById('root')).render(
     <StrictMode>
         <BrowserRouter>
             <ChakraProvider resetCSS={false}>
-                <WebSocketProvider>
-                    <Provider store={store}>
-                        <PersistGate persistor={persistor}>
-                            <App/>
-                        </PersistGate>
-                    </Provider>
-                </WebSocketProvider>
+                <Provider store={store}>
+                    <PersistGate persistor={persistor}>
+                        <WebSocketProvider>
+                            <App />
+                        </WebSocketProvider>
+                    </PersistGate>
+                </Provider>
             </ChakraProvider>
         </BrowserRouter>
     </StrictMode>,

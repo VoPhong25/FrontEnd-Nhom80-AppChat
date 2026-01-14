@@ -1,7 +1,7 @@
 import React from "react";
 import "../friend/Friend.css";
 
-const ShowGroup = ({nameGroup, isActive, onClick}) => {
+const ShowGroup = ({ nameGroup, lastMessage, isActive, onClick }) => {
     return (
         <div
             className={`friend ${isActive ? "active" : ""}`}
@@ -24,6 +24,9 @@ const ShowGroup = ({nameGroup, isActive, onClick}) => {
 
                         <div className="text">
                             <span>Nhóm chat</span>
+                        </div>
+                        <div className="text">
+                            <span>{lastMessage}</span>
                         </div>
                     </div>
                 </div>

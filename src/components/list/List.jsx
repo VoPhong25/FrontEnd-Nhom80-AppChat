@@ -20,7 +20,7 @@ import {
     setGroups,
     saveMessage,
     saveGroupMess,
-    logout,
+    logout, clearMessages,
 } from "../../redux/userSlice";
 
 import Friend from "../friend/Friend";
@@ -69,8 +69,10 @@ const List = ({ setChatUser, selectedUser }) => {
     };
 
     const handleGetPeopleChatMes = (payload) => {
-        payload.data.forEach(({ name, to, mes }) => {
-            const isSentByUser = name === infor.email;
+        dispatch(clearMessages({ name: selectedUser.name }));
+        payload.data.forEach(({ name, to, mes, createAt }) => {
+            console.log("time gửi tin: ", createAt)
+            const isSentByUser = name === infor.name;
             dispatch(
                 saveMessage({
                     name: isSentByUser ? to : name,
@@ -78,6 +80,7 @@ const List = ({ setChatUser, selectedUser }) => {
                         text: mes,
                         sender: name,
                         isSentByUser,
+                        createAt
                     },
                 })
             );
@@ -92,8 +95,8 @@ const List = ({ setChatUser, selectedUser }) => {
                     messGroup: {
                         text: mes,
                         sender: name,
-                        isSentByUser: name === infor.email,
-                        createdAt: createAt,
+                        isSentByUser: name === infor.name,
+                        createAt,
                     },
                 })
             );
@@ -103,6 +106,7 @@ const List = ({ setChatUser, selectedUser }) => {
     //xu lý gửi tin nhắn cho user
     const handleSendChat = (payload) => {
         dispatch(setFriends({ item: payload.data }));
+        // sendJsonMessage(SEND_CHAT(payload.data.name, ""));
     };
     //xu ly gyuwir tin nhắn cho group
     const handleSendChatToRoom = (payload) => {
@@ -157,9 +161,9 @@ const List = ({ setChatUser, selectedUser }) => {
         }
         const room = window.prompt("Nhập tên nhóm để vào:");
         if (!room) return;
-        
+
         setChatUser({ nameGroup: room, type: 1 });
-       
+
         sendJsonMessage(JOIN_ROOM(room));
     };
     // xu li nhập tên nhóm để tạo
@@ -199,7 +203,7 @@ const List = ({ setChatUser, selectedUser }) => {
                 <button onClick={findFriend}>Tìm bạn</button>
                 <button onClick={joinGroup}>Vào nhóm</button>
                         <button onClick={createGroup}>Tạo nhóm</button>
-               
+
             </div>
 
 
@@ -214,7 +218,14 @@ const List = ({ setChatUser, selectedUser }) => {
                             <Friend
                                 key={`friend-${item.name}`}
                                 name={item.name}
-                                unread={item.unread || 0}
+                                lastMessage={
+                                    item.lastMessage
+                                        ? item.lastMessage.isSentByUser
+                                            ? `Bạn: ${item.lastMessage.text}`
+                                            : item.lastMessage.text
+                                        : ""
+                                }
+                                time={item.lastMessage?.time}
                                 isActive={
                                     selectedUser?.type === 0 &&
                                     selectedUser?.name === item.name
@@ -225,7 +236,14 @@ const List = ({ setChatUser, selectedUser }) => {
                         ) : (
                             <div key={`group-wrap-${item.nameGroup}`}>
                                 <ShowGroup
+                                    key={`group-${item.nameGroup}`}
                                     nameGroup={item.nameGroup}
+                                    lastMessage={
+                                        item.lastMessage
+                                            ? `${item.lastMessage.sender}: ${item.lastMessage.text}`
+                                            : ""
+                                    }
+                                    time={item.lastMessage?.time}
                                     isActive={
                                         selectedUser?.type === 1 &&
                                         selectedUser?.nameGroup === item.nameGroup
@@ -242,7 +260,7 @@ const List = ({ setChatUser, selectedUser }) => {
                                                 return (
                                                     <div className="member-empty">
                                                         <div>No members yet</div>
-                                                        
+
                                                     </div>
                                                 );
                                             }

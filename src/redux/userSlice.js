@@ -3,7 +3,6 @@ import { createSlice } from "@reduxjs/toolkit";
 const initialState = {
     infor: {
         name: "",
-        email: "",
         friends: [],
         groups: [],
     },
@@ -16,7 +15,7 @@ const userSlice = createSlice({
     reducers: {
         setUser(state, action) {
             state.infor = {
-                ...state.infor,   // giữ friends, groups
+                ...state.infor,
                 ...action.payload
             };
             state.status = "auth";
@@ -27,21 +26,24 @@ const userSlice = createSlice({
         },
 
         setFriends(state, action) {
-            const { name, type, actionTime, avatarUrl } = action.payload.item;
+            const { name, type, actionTime } = action.payload.item;
 
             if (!Array.isArray(state.infor.friends)) {
                 state.infor.friends = [];
             }
 
-            if (state.infor.friends.some(f => f.name === name)) return;
+            let friend = state.infor.friends.find(f => f.name === name);
 
-            state.infor.friends.push({
-                name,
-                type,
-                actionTime,
-                avatarUrl,
-                listmessage: [],
-            });
+            // chưa có thì thêm mới
+            if (!friend) {
+                state.infor.friends.push({
+                    name,
+                    type,
+                    actionTime,
+                    listmessage: [],
+                    lastMessage: null,
+                });
+            }
         },
 
         saveMessage(state, action) {
@@ -49,16 +51,22 @@ const userSlice = createSlice({
             const friend = state.infor.friends.find(f => f.name === name);
             if (!friend) return;
 
-            friend.listmessage.push({
+            const isSentByUser = mess.sender === state.infor.name;
+
+            const newMessage = {
                 text: mess.text,
                 sender: mess.sender,
-                isSentByUser: mess.sender === state.infor.email,
-                time: new Date().toISOString(),
-            });
+                isSentByUser,
+                time: mess.createAt,
+            };
+          friend.listmessage.push(newMessage);
+
+            friend.lastMessage = newMessage;
+
         },
 
         setGroups(state, action) {
-        
+
             if (!state.infor) state.infor = { name: "", email: "", friends: [], groups: [] };
             if (!Array.isArray(state.infor.groups)) state.infor.groups = [];
 
@@ -75,6 +83,7 @@ const userSlice = createSlice({
                 type,
                 actionTime,
                 listmessage: [],
+                lastMessage: null,
             });
         },
 
@@ -83,13 +92,27 @@ const userSlice = createSlice({
             const group = state.infor.groups.find(g => g.nameGroup === nameGroup);
             if (!group) return;
 
-            group.listmessage.push({
+            const newMessage = {
                 text: messGroup.text,
                 sender: messGroup.sender,
                 isSentByUser: messGroup.isSentByUser,
                 time: messGroup.createdAt,
-            });
+            };
+
+            group.listmessage.push(newMessage);
+            group.lastMessage = newMessage;
+
         },
+
+        clearMessages(state, action) {
+            const { name } = action.payload;
+            const friend = state.infor.friends.find(f => f.name === name);
+            if (!friend) return;
+
+            friend.listmessage = [];
+        }
+
+
     },
 });
 
@@ -100,6 +123,7 @@ export const {
     setGroups,
     saveMessage,
     saveGroupMess,
+    clearMessages
 } = userSlice.actions;
 
 export default userSlice.reducer;

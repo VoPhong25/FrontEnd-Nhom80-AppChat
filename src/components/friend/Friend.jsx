@@ -15,7 +15,6 @@ const Friend = ({name, time, lastMessage, isActive, onClick }) => {
                     <div className="name">
                         <div className="info">
                             <span>{name}</span>
-                            <span>{time}</span>
                         </div>
                         <div className="text">
                             <span>{lastMessage}</span>

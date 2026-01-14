@@ -43,7 +43,10 @@ const List = ({ setChatUser, selectedUser }) => {
     const groups = infor.groups || [];
 
     //gop friend và group thanh 1 lisst chung
-    const all = [...friends, ...groups];
+    const all  = [...friends, ...groups].sort(
+        (a, b) => new Date(b.lastMessage?.time || 0) - new Date(a.lastMessage?.time || 0)
+    );
+
     console.log("list user, groud: ", all)
 
     const [searchValue, setSearchValue] = useState("");
@@ -53,6 +56,11 @@ const List = ({ setChatUser, selectedUser }) => {
     const handleLogout = () => {
         if (isReady) sendJsonMessage(Logout());
         dispatch(logout());
+        toast({
+            title: "Đăng xuất thành công",
+            status: "success",
+            duration: 2000,
+        });
         navigate("/");
     };
 
@@ -70,9 +78,13 @@ const List = ({ setChatUser, selectedUser }) => {
 
     const handleGetPeopleChatMes = (payload) => {
         dispatch(clearMessages({ name: selectedUser.name }));
-        payload.data.forEach(({ name, to, mes, createAt }) => {
-            console.log("time gửi tin: ", createAt)
+        const sorted = [...payload.data].sort(
+            (a, b) => new Date(a.createAt) - new Date(b.createAt)
+        );
+
+        sorted.forEach(({ name, to, mes, createAt }) => {
             const isSentByUser = name === infor.name;
+
             dispatch(
                 saveMessage({
                     name: isSentByUser ? to : name,
@@ -80,8 +92,9 @@ const List = ({ setChatUser, selectedUser }) => {
                         text: mes,
                         sender: name,
                         isSentByUser,
-                        createAt
+                        createAt,
                     },
+                    isHistory: true
                 })
             );
         });
@@ -98,19 +111,11 @@ const List = ({ setChatUser, selectedUser }) => {
                         isSentByUser: name === infor.name,
                         createAt,
                     },
+                    //ktra xem là nhăn tin hay đang render
+                    isHistory: true
                 })
             );
         });
-    };
-
-    //xu lý gửi tin nhắn cho user
-    const handleSendChat = (payload) => {
-        dispatch(setFriends({ item: payload.data }));
-        // sendJsonMessage(SEND_CHAT(payload.data.name, ""));
-    };
-    //xu ly gyuwir tin nhắn cho group
-    const handleSendChatToRoom = (payload) => {
-        dispatch(setGroups({ item: payload.data }));
     };
 
     useEffect(() => {
@@ -134,15 +139,6 @@ const List = ({ setChatUser, selectedUser }) => {
             case "GET_ROOM_CHAT_MES":
                 handleGetRoomChatMes(payload);
                 break;
-
-            case "SEND_CHAT":
-                handleSendChat(payload);
-                break;
-
-            case "SEND_CHAT_TO_ROOM":
-                handleSendChatToRoom(payload);
-                break;
-
             default:
                 break;
         }
@@ -150,7 +146,8 @@ const List = ({ setChatUser, selectedUser }) => {
 
     const findFriend = () => {
         if (!searchValue.trim()) return;
-        sendJsonMessage(SEND_CHAT(searchValue, "add friend"));
+        // let friend = friends.find(f => f.name === searchValue.trim());
+        // if(friend) return friend;
         setSearchValue("");
     };
     // xu li nhập tên nhóm để vào

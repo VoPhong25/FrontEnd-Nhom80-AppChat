@@ -45,25 +45,31 @@ const userSlice = createSlice({
                 });
             }
         },
-
         saveMessage(state, action) {
-            const { name, mess } = action.payload;
-            const friend = state.infor.friends.find(f => f.name === name);
-            if (!friend) return;
+            const { name, mess, isHistory } = action.payload;
+            const friends = state.infor.friends;
 
-            const isSentByUser = mess.sender === state.infor.name;
+            const index = friends.findIndex(f => f.name === name);
+            if (index === -1) return;
+
+            const friend = friends[index];
 
             const newMessage = {
                 text: mess.text,
                 sender: mess.sender,
-                isSentByUser,
+                isSentByUser: mess.sender === state.infor.name,
                 time: mess.createAt,
             };
-          friend.listmessage.push(newMessage);
 
+            friend.listmessage.push(newMessage);
             friend.lastMessage = newMessage;
 
+            if (isHistory) return;
+            //đưa ngươi đang nhăn lên đàu danh sách
+            friends.splice(index, 1);
+            friends.unshift(friend);
         },
+
 
         setGroups(state, action) {
 
@@ -88,21 +94,30 @@ const userSlice = createSlice({
         },
 
         saveGroupMess(state, action) {
-            const { nameGroup, messGroup } = action.payload;
-            const group = state.infor.groups.find(g => g.nameGroup === nameGroup);
-            if (!group) return;
+            const { nameGroup, messGroup, isHistory } = action.payload;
+            const groups = state.infor.groups;
+
+            const index = groups.findIndex(g => g.nameGroup === nameGroup);
+            if (index === -1) return;
+
+            const group = groups[index];
 
             const newMessage = {
                 text: messGroup.text,
                 sender: messGroup.sender,
                 isSentByUser: messGroup.isSentByUser,
-                time: messGroup.createdAt,
+                time: messGroup.createAt,
             };
 
             group.listmessage.push(newMessage);
             group.lastMessage = newMessage;
 
-        },
+            if (isHistory) return;
+
+            groups.splice(index, 1);
+            groups.unshift(group);
+        }
+,
 
         clearMessages(state, action) {
             const { name } = action.payload;

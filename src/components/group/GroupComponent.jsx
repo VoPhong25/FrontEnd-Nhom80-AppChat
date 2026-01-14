@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState, useEffect } from "react";
+import React, { useContext, useMemo, useState, useEffect, useRef } from "react";
 import { useToast } from "@chakra-ui/react";
 import { WebSocketContext } from "../../socket/WebSocketContext";
 import {
@@ -8,7 +8,8 @@ import {
     SEND_CHAT_TO_ROOM,
 } from "../../api/action";
 import "../friend/Friend.css";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { saveGroupMess } from "../../redux/userSlice";
 
 const GroupComponet = ({ group }) => {
     const { isReady, messages, sendJsonMessage } = useContext(WebSocketContext);
@@ -21,6 +22,7 @@ const GroupComponet = ({ group }) => {
     const [pendingCreate, setPendingCreate] = useState(false);
     const [pendingJoin, setPendingJoin] = useState(false);
     const user = useSelector((s) => s.user || {});
+    const dispatch = useDispatch();
 
     const createRoom = async () => {
         if (!roomName) return;
@@ -50,6 +52,30 @@ const GroupComponet = ({ group }) => {
 
     const sendMessageToRoom = () => {
         if (!currentRoom || !outMessage) return;
+        if (!sendJsonMessage) {
+            toast({ title: "WebSocket not ready", status: "error", duration: 3000 });
+            return;
+        }
+
+        // optimistic update to redux so message appears immediately
+        try {
+            const createdAt = new Date().toISOString();
+            const myId = (user.infor && (user.infor.name || user.infor.email)) || "me";
+            dispatch(
+                saveGroupMess({
+                    nameGroup: currentRoom,
+                    messGroup: {
+                        text: outMessage,
+                        sender: myId,
+                        isSentByUser: true,
+                        createdAt,
+                    },
+                })
+            );
+        } catch (e) {
+            // ignore dispatch failures
+        }
+
         sendJsonMessage(SEND_CHAT_TO_ROOM(currentRoom, outMessage));
         setOutMessage("");
     };
@@ -125,7 +151,7 @@ const GroupComponet = ({ group }) => {
                     if (evt === "GET_ROOM_CHAT_MES") {
                         const d = m.data.data || {};
                         try {
-                            // removed pendingHistory/subscribedRooms handling — history is considered requested on group open
+                            
                         } catch (e) {
                            
                         }
@@ -143,32 +169,38 @@ const GroupComponet = ({ group }) => {
             .map((m, i) => ({ id: i, raw: m }));
     }, [messages, currentRoom]);
 
-    // produce a simplified list of messages for UI bubbles (from websocket raw messages)
     const wsDisplayMessages = useMemo(() => {
         const out = [];
         roomMessages.forEach((entry) => {
             const raw = entry.raw;
             const evt = raw.event || (raw.data && raw.data.event);
             const payload = raw.data ? raw.data.data || raw.data : raw;
-            if (evt === "GET_ROOM_CHAT_MES" && payload && Array.isArray(payload.chatData)) {
-                payload.chatData.forEach((c) => out.push({ text: c.mes, sender: c.name, time: c.createAt }));
+                if (evt === "GET_ROOM_CHAT_MES") {
+                    const myId = (user.infor && (user.infor.name || user.infor.email)) || null;
+                    const chatData = (payload && (payload.chatData || (payload.data && payload.data.chatData))) || [];
+                    if (Array.isArray(chatData)) {
+                        chatData.forEach((c) => out.push({ text: c.mes, sender: c.name, time: c.createAt, isSentByUser: c.name === myId }));
+                    }
             } else if (evt === "SEND_CHAT") {
                 const d = raw.data.data || {};
-                if (d.type === "room") out.push({ text: d.mes, sender: d.from || d.name, time: d.createAt || new Date().toISOString() });
+                if (d.type === "room") {
+                    const myId = (user.infor && (user.infor.name || user.infor.email)) || null;
+                    out.push({ text: d.mes, sender: d.from || d.name, time: d.createAt || new Date().toISOString(), isSentByUser: (d.from || d.name) === myId });
+                }
             } else if (payload && payload.mes) {
-                out.push({ text: payload.mes, sender: payload.name || payload.sender, time: payload.createAt || payload.createdAt });
+                const myId = (user.infor && (user.infor.name || user.infor.email)) || null;
+                out.push({ text: payload.mes, sender: payload.name || payload.sender, time: payload.createAt || payload.createdAt, isSentByUser: (payload.name || payload.sender) === myId });
             }
         });
         return out;
-    }, [roomMessages]);
+    }, [roomMessages, user]);
 
-    // Prefer messages saved in Redux (List.jsx parses server responses and saved them there)
     const reduxGroupMessages = useMemo(() => {
         try {
             const groups = (user.infor && user.infor.groups) || [];
             const g = groups.find((gg) => gg.nameGroup === currentRoom) || null;
             if (!g || !Array.isArray(g.listmessage) || !g.listmessage.length) return [];
-            return g.listmessage.map((m) => ({ text: m.text, sender: m.sender, time: m.time }));
+            return g.listmessage.map((m) => ({ text: m.text, sender: m.sender, time: m.time, isSentByUser: !!m.isSentByUser }));
         } catch (e) {
             return [];
         }
@@ -176,8 +208,20 @@ const GroupComponet = ({ group }) => {
 
     const displayMessages = reduxGroupMessages.length ? reduxGroupMessages : wsDisplayMessages;
 
+    const messagesBoxRef = useRef(null);
+
+    // auto scroll to bottom when messages change
+    useEffect(() => {
+        try {
+            const el = messagesBoxRef.current;
+            if (el) {
+                el.scrollTop = el.scrollHeight;
+            }
+        } catch (e) {}
+    }, [displayMessages.length]);
+
     return (
-        <div className="groupPanel">
+        <div className="groupPanel" style={{display:'flex', flexDirection:'column', height:'100%'}}>
             <h3 style={{marginBottom:8}}>Group chat</h3>
 
             <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:10}}>
@@ -197,22 +241,21 @@ const GroupComponet = ({ group }) => {
 
             <div style={{marginBottom:8}}><strong>Current:</strong> {currentRoom || '(none)'}</div>
 
-            <div style={{border:'1px solid #eee', padding:12, borderRadius:8, height:280, overflowY:'auto', background:'#fafafa'}}>
+            <div ref={messagesBoxRef} style={{border:'1px solid #eee', padding:12, borderRadius:8, flex:1, overflowY:'auto', background:'#fafafa'}}>
                 {displayMessages.length ? displayMessages.map((m, i) => (
-                    <div key={i} style={{display:'flex', justifyContent: (m.sender === 'me')? 'flex-end':'flex-start', marginBottom:8}}>
-                        <div style={{maxWidth:'70%', padding:10, borderRadius:12, background: (m.sender === 'me')? '#DCF8C6':'#fff', boxShadow:'0 1px 1px rgba(0,0,0,0.06)'}}>
+                    <div key={i} style={{display:'flex', justifyContent: (m.isSentByUser)? 'flex-end':'flex-start', marginBottom:8}}>
+                        <div style={{maxWidth:'70%', padding:10, borderRadius:12, background: (m.isSentByUser)? '#DCF8C6':'#fff', boxShadow:'0 1px 1px rgba(0,0,0,0.06)'}}>
                             <div style={{fontSize:14, marginBottom:6}}>{m.text}</div>
-                            <div style={{fontSize:11, color:'#666', textAlign:'right'}}>{m.sender || ''}</div>
+                            <div style={{fontSize:11, color:'#666', textAlign:'right'}}>{m.isSentByUser ? (user.infor && user.infor.name) || (user.infor && user.infor.email) || 'me' : (m.sender || '')}</div>
                         </div>
                     </div>
                 )) : (
                     <div style={{color:'#666'}}>No messages yet for this room.</div>
                 )}
             </div>
-
-            <div style={{display:'flex', gap:8, marginTop:10}}>
+            <div style={{display:'flex', gap:8, marginTop:10, alignItems:'center'}}>
                 <input placeholder="Type a message" value={outMessage} onChange={(e)=>setOutMessage(e.target.value)} style={{flex:1, padding:8}} disabled={!currentRoom} />
-                <button onClick={sendMessageToRoom} disabled={!currentRoom || !outMessage}>Send</button>
+                <button onClick={sendMessageToRoom} disabled={!currentRoom || !outMessage} style={{padding:'10px 24px'}}>Send</button>
             </div>
         </div>
     );

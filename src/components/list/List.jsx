@@ -69,10 +69,15 @@ const List = ({ setChatUser, selectedUser }) => {
     };
 
     const handleGetPeopleChatMes = (payload) => {
-        dispatch(clearMessages({ name: selectedUser.name }));
-        payload.data.forEach(({ name, to, mes, createAt }) => {
-            console.log("time gửi tin: ", createAt)
-            const isSentByUser = name === infor.name;
+        // clear existing messages for the selected user (if any)
+        if (selectedUser?.name) dispatch(clearMessages({ name: selectedUser.name }));
+
+        // payload may already be normalized (payload) or wrapped ({ data: [...] })
+        const list = (payload && (payload.data || payload)) || [];
+        if (!Array.isArray(list)) return;
+        const myId = infor.name || infor.email;
+        list.forEach(({ name, to, mes, createAt, createdAt }) => {
+            const isSentByUser = name === myId;
             dispatch(
                 saveMessage({
                     name: isSentByUser ? to : name,
@@ -80,7 +85,7 @@ const List = ({ setChatUser, selectedUser }) => {
                         text: mes,
                         sender: name,
                         isSentByUser,
-                        createAt
+                        createAt: createAt || createdAt,
                     },
                 })
             );
@@ -88,63 +93,117 @@ const List = ({ setChatUser, selectedUser }) => {
     };
 
     const handleGetRoomChatMes = (payload) => {
-        payload.data.chatData.forEach(({ name, mes, createAt }) => {
+        // payload may be normalized to the inner data object or wrapped
+        const myId = infor.name || infor.email;
+        const data = (payload && (payload.data || payload)) || {};
+        const chatData = data.chatData || (data.data && data.data.chatData) || [];
+        const roomName = data.name || (data.data && data.data.name) || null;
+        if (!Array.isArray(chatData)) return;
+        chatData.forEach(({ name, mes, createAt, createdAt }) => {
             dispatch(
                 saveGroupMess({
-                    nameGroup: payload.data.name,
+                    nameGroup: roomName,
                     messGroup: {
                         text: mes,
                         sender: name,
-                        isSentByUser: name === infor.name,
-                        createAt,
+                        isSentByUser: name === myId,
+                        createdAt: createAt || createdAt,
                     },
                 })
             );
         });
     };
 
-    //xu lý gửi tin nhắn cho user
+    //xu lý gửi tin nhắn cho user (people)
     const handleSendChat = (payload) => {
-        dispatch(setFriends({ item: payload.data }));
-        // sendJsonMessage(SEND_CHAT(payload.data.name, ""));
+        try {
+            const d = (payload && (payload.data && (payload.data.data || payload.data))) || payload;
+            const text = d.mes || d.message || d.msg || "";
+            const from = d.from || d.name || d.sender || null;
+            const to = d.to || null;
+            const createAt = d.createAt || d.createdAt || null;
+            if (!text || !from) return;
+            // determine conversation partner: if the message is from me -> partner is 'to', else partner is 'from'
+            const myId = infor.name || infor.email;
+            const partner = from === myId ? to : from;
+            if (!partner) return;
+            dispatch(
+                saveMessage({
+                    name: partner,
+                    mess: {
+                        text,
+                        sender: from,
+                        isSentByUser: from === myId,
+                        createAt,
+                    },
+                })
+            );
+        } catch (e) {
+            // ignore
+        }
     };
     //xu ly gyuwir tin nhắn cho group
-    const handleSendChatToRoom = (payload) => {
-        dispatch(setGroups({ item: payload.data }));
-    };
+        const handleSendChatToRoom = (payload) => {
+            // payload may contain message info for room sends
+            try {
+                const d = (payload && (payload.data && (payload.data.data || payload.data))) || payload;
+                const nameGroup = d.to || d.name || (payload.data && payload.data.name) || null;
+                const text = d.mes || d.message || d.msg || "";
+                const sender = d.from || d.name || d.sender || (payload.data && payload.data.from) || null;
+                const createdAt = d.createAt || d.createdAt || new Date().toISOString();
+                if (!nameGroup || !text) return;
+                const myId = infor.name || infor.email;
+                dispatch(
+                    saveGroupMess({
+                        nameGroup,
+                        messGroup: {
+                            text,
+                            sender,
+                            isSentByUser: sender === myId,
+                            createdAt,
+                        },
+                    })
+                );
+            } catch (e) {
+                // ignore parse errors
+            }
+        };
 
     useEffect(() => {
         if (!messages.length) return;
-
         const currentIndex = messages.length - 1;
 
-        //tranh xu ly 1 message nhiều làm
+        // avoid processing same message multiple times
         if (currentIndex === lastIndexRef.current) return;
 
         lastIndexRef.current = currentIndex;
-        const payload = messages[currentIndex];
+        const raw = messages[currentIndex];
 
-        if (payload.status !== "success") return;
+        // normalize event / status / payload
+        const evt = raw.event || (raw.data && raw.data.event) || (raw.action && raw.action.event);
+        const status = raw.status || (raw.data && raw.data.status) || null;
+        const payload = raw.data ? (raw.data.data || raw.data) : raw;
 
-        switch (payload.event) {
-            case "GET_PEOPLE_CHAT_MES":
-                handleGetPeopleChatMes(payload);
-                break;
+        if (status && status !== "success") return;
 
-            case "GET_ROOM_CHAT_MES":
-                handleGetRoomChatMes(payload);
-                break;
+        if (!evt) return;
 
-            case "SEND_CHAT":
-                handleSendChat(payload);
-                break;
-
-            case "SEND_CHAT_TO_ROOM":
-                handleSendChatToRoom(payload);
-                break;
-
-            default:
-                break;
+        if (evt === "GET_PEOPLE_CHAT_MES") {
+            handleGetPeopleChatMes(payload);
+        } else if (evt === "GET_ROOM_CHAT_MES") {
+            handleGetRoomChatMes(payload);
+        } else if (evt === "SEND_CHAT") {
+            // server may use SEND_CHAT for both people and room messages
+            const d = (payload && (payload.data || payload)) || payload;
+            const type = d.type || (d.data && d.data.type) || null;
+            if (type === "room") {
+                handleSendChatToRoom({ data: d });
+            } else {
+                handleSendChat({ data: d });
+            }
+        } else if (evt === "SEND_CHAT_TO_ROOM") {
+            // fallback if server uses a specific event
+            handleSendChatToRoom(payload);
         }
     }, [messages]);
 

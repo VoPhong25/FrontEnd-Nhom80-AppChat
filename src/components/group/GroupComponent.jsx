@@ -6,61 +6,62 @@ import {
     JOIN_ROOM,
     GET_ROOM_CHAT_MES,
     SEND_CHAT_TO_ROOM,
+    RE_LOGIN
 } from "../../api/action";
-import "../friend/Friend.css";
 import { useSelector, useDispatch } from "react-redux";
 import { saveGroupMess } from "../../redux/userSlice";
+
+import { Phone, Video, Menu, Smile, Paperclip, Send, Users } from "lucide-react"; 
+import EmojiPicker from "emoji-picker-react";
+import "../chat/Chat.css"; 
+// -----------------------------
 
 const GroupComponet = ({ group }) => {
     const { isReady, messages, sendJsonMessage } = useContext(WebSocketContext);
     const toast = useToast();
+    const dispatch = useDispatch();
+    const user = useSelector((s) => s.user || {});
+
 
     const [roomName, setRoomName] = useState("");
     const [currentRoom, setCurrentRoom] = useState("");
-    // subscribedRooms removed — history is auto-loaded on group select
     const [outMessage, setOutMessage] = useState("");
     const [pendingCreate, setPendingCreate] = useState(false);
     const [pendingJoin, setPendingJoin] = useState(false);
-    const user = useSelector((s) => s.user || {});
-    const dispatch = useDispatch();
+    
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const messagesBoxRef = useRef(null);
+
+    const myId = (user.infor && (user.infor.name || user.infor.email)) || "";
 
     const createRoom = async () => {
         if (!roomName) return;
         const payload = CREATE_ROOM(roomName);
-        console.log("Sending CREATE_ROOM:", payload);
-        if (!sendJsonMessage) {
-            toast({ title: "WebSocket send not ready", status: "error", duration: 3000 });
-            return;
+        if (sendJsonMessage) {
+            sendJsonMessage(payload);
+            setPendingCreate(true);
+        } else {
+            toast({ title: "WebSocket not ready", status: "error", duration: 3000 });
         }
-        sendJsonMessage(payload);
-        setPendingCreate(true);
     };
 
     const joinRoom = async () => {
         if (!roomName) return;
         const payload = JOIN_ROOM(roomName);
-        console.log("Sending JOIN_ROOM:", payload);
-        if (!sendJsonMessage) {
-            toast({ title: "WebSocket send not ready", status: "error", duration: 3000 });
-            return;
+        if (sendJsonMessage) {
+            sendJsonMessage(payload);
+            setPendingJoin(true);
+        } else {
+            toast({ title: "WebSocket not ready", status: "error", duration: 3000 });
         }
-        sendJsonMessage(payload);
-        setPendingJoin(true);
     };
 
-    // history load removed as it's requested automatically on group change
-
     const sendMessageToRoom = () => {
-        if (!currentRoom || !outMessage) return;
-        if (!sendJsonMessage) {
-            toast({ title: "WebSocket not ready", status: "error", duration: 3000 });
-            return;
-        }
+        if (!currentRoom || !outMessage.trim()) return;
+        if (!sendJsonMessage) return;
 
-        // optimistic update to redux so message appears immediately
         try {
             const createdAt = new Date().toISOString();
-            const myId = (user.infor && (user.infor.name || user.infor.email)) || "me";
             dispatch(
                 saveGroupMess({
                     nameGroup: currentRoom,
@@ -72,22 +73,30 @@ const GroupComponet = ({ group }) => {
                     },
                 })
             );
-        } catch (e) {
-            // ignore dispatch failures
-        }
+        } catch (e) {}
 
         sendJsonMessage(SEND_CHAT_TO_ROOM(currentRoom, outMessage));
         setOutMessage("");
+        setShowEmojiPicker(false); 
     };
+
+    const handleKeyDown = (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            sendMessageToRoom();
+        }
+    };
+
+    const handleEmojiClick = (e) => {
+        setOutMessage((prev) => prev + e.emoji);
+    };
+
+
     useEffect(() => {
         if (group && group.nameGroup) {
             setCurrentRoom(group.nameGroup);
             setRoomName(group.nameGroup);
-            try {
-                if (sendJsonMessage) sendJsonMessage(GET_ROOM_CHAT_MES(group.nameGroup));
-            } catch (e) {
-                // ignore
-            }
+            if (sendJsonMessage) sendJsonMessage(GET_ROOM_CHAT_MES(group.nameGroup));
         }
     }, [group]);
 
@@ -95,7 +104,7 @@ const GroupComponet = ({ group }) => {
         if (!messages.length) return;
         const last = messages[messages.length - 1];
         if (!last) return;
-
+        
         const evt = last.event || (last.data && last.data.event);
         const status = last.status;
         const payload = last.data ? last.data.data || last.data : last;
@@ -103,159 +112,172 @@ const GroupComponet = ({ group }) => {
         if (!evt) return;
 
         if (evt === "ACTION_NOT_EXIT" || evt === "AUTH") {
-            const serverMessage = last.message || last.mes || payload.message || payload.mes || JSON.stringify(last);
-            toast({ title: evt, description: serverMessage, status: "error", duration: 6000 });
+             toast({ title: evt, description: payload.mes || "Error", status: "error", duration: 3000 });
+             setPendingCreate(false); setPendingJoin(false);
+             return;
+        }
 
+        if (evt === "CREATE_ROOM" && pendingCreate && payload.name === roomName) {
             setPendingCreate(false);
+            if (status === "success") toast({ title: `Created '${roomName}'`, status: "success" });
+        }
+
+        if (evt === "JOIN_ROOM" && pendingJoin && payload.name === roomName) {
             setPendingJoin(false);
-            return;
-        }
-
-        if (evt === "CREATE_ROOM") {
-            if (pendingCreate && payload && payload.name === roomName) {
-                setPendingCreate(false);
-                if (status === "success") {
-                    toast({ title: `Room '${roomName}' created`, status: "success", duration: 3000 });
-                } else if (status === "error") {
-                    toast({ title: `Create room failed: ${last.message || "server error"}`, status: "error", duration: 4000 });
-                }
-            }
-        }
-
-        if (evt === "JOIN_ROOM") {
-            if (pendingJoin && payload && payload.name === roomName) {
-                setPendingJoin(false);
-                if (status === "success") {
-                    setCurrentRoom(payload.name);
-                    toast({ title: `Joined '${payload.name}'`, status: "success", duration: 3000 });
-                } else if (status === "error") {
-                    toast({ title: `Join room failed: ${last.message || "server error"}`, description: JSON.stringify(last), status: "error", duration: 6000 });
-                }
+            if (status === "success") {
+                setCurrentRoom(payload.name);
+                toast({ title: `Joined '${payload.name}'`, status: "success" });
             }
         }
     }, [messages]);
 
     const roomMessages = useMemo(() => {
         if (!currentRoom) return [];
-        return messages
-            .filter((m) => m && m.data)
-            .filter((m) => {
-                try {
-                    const evt = m.data.event || (m.action && m.action.event);
-                    const payload = m.data.data || m.data;
-                    if (!evt && payload && payload.type === "room" && payload.to === currentRoom) return true;
-                    if (evt === "SEND_CHAT") {
-                        const d = m.data.data || {};
-                        return d.type === "room" && d.to === currentRoom;
-                    }
-                    if (evt === "GET_ROOM_CHAT_MES") {
-                        const d = m.data.data || {};
-                        try {
-                            
-                        } catch (e) {
-                           
-                        }
-                        return d.name === currentRoom || d.to === currentRoom;
-                    }
-                    if (evt === "CREATE_ROOM" || evt === "JOIN_ROOM") {
-                        const d = m.data.data || {};
-                        return d.name === currentRoom || d.to === currentRoom;
-                    }
-                } catch (e) {
-                    return false;
-                }
+        return messages.filter(m => {
+            try {
+                const evt = m.event || (m.data && m.data.event);
+                const p = m.data ? (m.data.data || m.data) : m;
+    
+                if ((evt === "SEND_CHAT" || !evt) && p.type === "room" && p.to === currentRoom) return true;
+                if (evt === "GET_ROOM_CHAT_MES" && (p.name === currentRoom || p.to === currentRoom)) return true;
                 return false;
-            })
-            .map((m, i) => ({ id: i, raw: m }));
+            } catch(e) { return false; }
+        }).map((m, i) => ({ id: i, raw: m }));
     }, [messages, currentRoom]);
 
-    const wsDisplayMessages = useMemo(() => {
+    const displayMessages = useMemo(() => {
+
+        const groups = (user.infor && user.infor.groups) || [];
+        const g = groups.find((gg) => gg.nameGroup === currentRoom);
+        
+        if (g && Array.isArray(g.listmessage) && g.listmessage.length) {
+            return g.listmessage.map(m => ({
+                text: m.text,
+                sender: m.sender,
+                time: m.time,
+                isSentByUser: m.sender === myId 
+            }));
+        }
+
         const out = [];
-        roomMessages.forEach((entry) => {
-            const raw = entry.raw;
-            const evt = raw.event || (raw.data && raw.data.event);
-            const payload = raw.data ? raw.data.data || raw.data : raw;
-                if (evt === "GET_ROOM_CHAT_MES") {
-                    const myId = (user.infor && (user.infor.name || user.infor.email)) || null;
-                    const chatData = (payload && (payload.chatData || (payload.data && payload.data.chatData))) || [];
-                    if (Array.isArray(chatData)) {
-                        chatData.forEach((c) => out.push({ text: c.mes, sender: c.name, time: c.createAt, isSentByUser: c.name === myId }));
-                    }
-            } else if (evt === "SEND_CHAT") {
-                const d = raw.data.data || {};
-                if (d.type === "room") {
-                    const myId = (user.infor && (user.infor.name || user.infor.email)) || null;
-                    out.push({ text: d.mes, sender: d.from || d.name, time: d.createAt || new Date().toISOString(), isSentByUser: (d.from || d.name) === myId });
-                }
-            } else if (payload && payload.mes) {
-                const myId = (user.infor && (user.infor.name || user.infor.email)) || null;
-                out.push({ text: payload.mes, sender: payload.name || payload.sender, time: payload.createAt || payload.createdAt, isSentByUser: (payload.name || payload.sender) === myId });
-            }
+        roomMessages.forEach(entry => {
+             const raw = entry.raw;
+             const evt = raw.event || (raw.data && raw.data.event);
+             const p = raw.data ? (raw.data.data || raw.data) : raw;
+             
+             if (evt === "GET_ROOM_CHAT_MES") {
+                 const list = p.chatData || (p.data && p.data.chatData) || [];
+                 if(Array.isArray(list)) list.forEach(c => out.push({
+                     text: c.mes, sender: c.name, time: c.createAt, isSentByUser: c.name === myId
+                 }));
+             } else {
+                 const sender = p.from || p.name || p.sender;
+                 out.push({
+                     text: p.mes, sender: sender, time: p.createAt || new Date().toISOString(), isSentByUser: sender === myId
+                 });
+             }
         });
         return out;
-    }, [roomMessages, user]);
+    }, [roomMessages, user, currentRoom, myId]);
 
-    const reduxGroupMessages = useMemo(() => {
-        try {
-            const groups = (user.infor && user.infor.groups) || [];
-            const g = groups.find((gg) => gg.nameGroup === currentRoom) || null;
-            if (!g || !Array.isArray(g.listmessage) || !g.listmessage.length) return [];
-            return g.listmessage.map((m) => ({ text: m.text, sender: m.sender, time: m.time, isSentByUser: !!m.isSentByUser }));
-        } catch (e) {
-            return [];
-        }
-    }, [user, currentRoom]);
-
-    const displayMessages = reduxGroupMessages.length ? reduxGroupMessages : wsDisplayMessages;
-
-    const messagesBoxRef = useRef(null);
-
-    // auto scroll to bottom when messages change
     useEffect(() => {
-        try {
-            const el = messagesBoxRef.current;
-            if (el) {
-                el.scrollTop = el.scrollHeight;
-            }
-        } catch (e) {}
+        if(messagesBoxRef.current) messagesBoxRef.current.scrollTop = messagesBoxRef.current.scrollHeight;
     }, [displayMessages.length]);
 
+
     return (
-        <div className="groupPanel" style={{display:'flex', flexDirection:'column', height:'100%'}}>
-            <h3 style={{marginBottom:8}}>Group chat</h3>
+        <div className="chatContainer" style={{height: '100%'}}>
+            <div className="header" style={{justifyContent:'space-between'}}>
+                <div className="item">
+                    <div className="img">
+                     
+                        <img
+                            src="https://cdn-icons-png.flaticon.com/512/681/681494.png" 
+                            alt="group-avatar"
+                        />
+                    </div>
+                    <div className="name">
+                        <span>{currentRoom || "Chưa chọn phòng"}</span>
 
-            <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:10}}>
-                <input
-                    placeholder="Room name"
-                    value={roomName}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    style={{flex:1, padding:8}}
-                />
-                {!currentRoom && (
-                    <>
-                        <button onClick={createRoom} disabled={!isReady || !roomName}>Create</button>
-                        <button onClick={joinRoom} disabled={!isReady || !roomName}>Join</button>
-                    </>
-                )}
-            </div>
-
-            <div style={{marginBottom:8}}><strong>Current:</strong> {currentRoom || '(none)'}</div>
-
-            <div ref={messagesBoxRef} style={{border:'1px solid #eee', padding:12, borderRadius:8, flex:1, overflowY:'auto', background:'#fafafa'}}>
-                {displayMessages.length ? displayMessages.map((m, i) => (
-                    <div key={i} style={{display:'flex', justifyContent: (m.isSentByUser)? 'flex-end':'flex-start', marginBottom:8}}>
-                        <div style={{maxWidth:'70%', padding:10, borderRadius:12, background: (m.isSentByUser)? '#DCF8C6':'#fff', boxShadow:'0 1px 1px rgba(0,0,0,0.06)'}}>
-                            <div style={{fontSize:14, marginBottom:6}}>{m.text}</div>
-                            <div style={{fontSize:11, color:'#666', textAlign:'right'}}>{m.isSentByUser ? (user.infor && user.infor.name) || (user.infor && user.infor.email) || 'me' : (m.sender || '')}</div>
+                        <div style={{fontSize: 11, display:'flex', gap: 5, marginTop: 2}}>
+                            <input 
+                                placeholder="Nhập tên phòng..." 
+                                value={roomName} 
+                                onChange={e => setRoomName(e.target.value)}
+                                style={{border:'1px solid #ddd', borderRadius:4, padding:'2px 5px', width: 120}}
+                            />
+                            {!currentRoom && (
+                                <>
+                                    <button onClick={createRoom} disabled={!isReady} style={{cursor:'pointer', padding:'2px 6px', fontSize:10, background:'#eee', border:'none', borderRadius:4}}>Tạo</button>
+                                    <button onClick={joinRoom} disabled={!isReady} style={{cursor:'pointer', padding:'2px 6px', fontSize:10, background:'#eee', border:'none', borderRadius:4}}>Vào</button>
+                                </>
+                            )}
                         </div>
                     </div>
-                )) : (
-                    <div style={{color:'#666'}}>No messages yet for this room.</div>
+                </div>
+
+                <div className="icons">
+                    <Phone size={18} />
+                    <Video size={18} />
+                    <Menu size={18} />
+                </div>
+            </div>
+
+            <div className="main" ref={messagesBoxRef}>
+                {displayMessages.length > 0 ? (
+                    displayMessages.map((m, i) => (
+                        <div key={i} className={`message ${m.isSentByUser ? 'right' : 'left'}`}>
+                        
+                            {!m.isSentByUser && (
+                                <div style={{fontSize: 10, fontWeight: 'bold', marginBottom: 2, color: '#444'}}>
+                                    {m.sender}
+                                </div>
+                            )}
+                            <div className="messageText">{m.text}</div>
+                        </div>
+                    ))
+                ) : (
+                    <div style={{textAlign:'center', color:'#999', marginTop: 20}}>
+                        {currentRoom ? "Chưa có tin nhắn nào." : "Hãy nhập tên phòng để tham gia."}
+                    </div>
                 )}
             </div>
-            <div style={{display:'flex', gap:8, marginTop:10, alignItems:'center'}}>
-                <input placeholder="Type a message" value={outMessage} onChange={(e)=>setOutMessage(e.target.value)} style={{flex:1, padding:8}} disabled={!currentRoom} />
-                <button onClick={sendMessageToRoom} disabled={!currentRoom || !outMessage} style={{padding:'10px 24px'}}>Send</button>
+
+            {showEmojiPicker && (
+                <div className="emojiPicker">
+                    <EmojiPicker onEmojiClick={handleEmojiClick} height={350} width="100%" />
+                </div>
+            )}
+
+            <div className="footer">
+                <input
+                    className="input"
+                    placeholder={currentRoom ? `Nhắn tin tới ${currentRoom}...` : "Chọn phòng trước"}
+                    value={outMessage}
+                    onChange={(e) => setOutMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={!currentRoom}
+                />
+
+                <div className="sendItem">
+                    <Smile
+                        size={20}
+                        className="icon"
+                        onClick={() => setShowEmojiPicker((prev) => !prev)}
+                    />
+                    
+                    <label style={{cursor: 'pointer', display:'flex'}}>
+                        <Paperclip size={20} className="icon" />
+                        <input type="file" hidden disabled={!currentRoom}/>
+                    </label>
+
+                    <Send
+                        size={20}
+                        className="icon"
+                        onClick={sendMessageToRoom}
+                        style={{color: (currentRoom && outMessage) ? '#2563eb' : '#ccc'}}
+                    />
+                </div>
             </div>
         </div>
     );

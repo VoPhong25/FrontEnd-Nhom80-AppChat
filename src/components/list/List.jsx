@@ -69,10 +69,10 @@ const List = ({ setChatUser, selectedUser }) => {
     };
 
     const handleGetPeopleChatMes = (payload) => {
-        // clear existing messages for the selected user (if any)
+    
         if (selectedUser?.name) dispatch(clearMessages({ name: selectedUser.name }));
 
-        // payload may already be normalized (payload) or wrapped ({ data: [...] })
+    
         const list = (payload && (payload.data || payload)) || [];
         if (!Array.isArray(list)) return;
         const myId = infor.name || infor.email;
@@ -93,7 +93,7 @@ const List = ({ setChatUser, selectedUser }) => {
     };
 
     const handleGetRoomChatMes = (payload) => {
-        // payload may be normalized to the inner data object or wrapped
+    
         const myId = infor.name || infor.email;
         const data = (payload && (payload.data || payload)) || {};
         const chatData = data.chatData || (data.data && data.data.chatData) || [];
@@ -144,7 +144,7 @@ const List = ({ setChatUser, selectedUser }) => {
     };
     //xu ly gyuwir tin nhắn cho group
         const handleSendChatToRoom = (payload) => {
-            // payload may contain message info for room sends
+    
             try {
                 const d = (payload && (payload.data && (payload.data.data || payload.data))) || payload;
                 const nameGroup = d.to || d.name || (payload.data && payload.data.name) || null;
@@ -165,7 +165,7 @@ const List = ({ setChatUser, selectedUser }) => {
                     })
                 );
             } catch (e) {
-                // ignore parse errors
+           
             }
         };
 
@@ -173,13 +173,13 @@ const List = ({ setChatUser, selectedUser }) => {
         if (!messages.length) return;
         const currentIndex = messages.length - 1;
 
-        // avoid processing same message multiple times
+      
         if (currentIndex === lastIndexRef.current) return;
 
         lastIndexRef.current = currentIndex;
         const raw = messages[currentIndex];
 
-        // normalize event / status / payload
+       
         const evt = raw.event || (raw.data && raw.data.event) || (raw.action && raw.action.event);
         const status = raw.status || (raw.data && raw.data.status) || null;
         const payload = raw.data ? (raw.data.data || raw.data) : raw;
@@ -193,7 +193,7 @@ const List = ({ setChatUser, selectedUser }) => {
         } else if (evt === "GET_ROOM_CHAT_MES") {
             handleGetRoomChatMes(payload);
         } else if (evt === "SEND_CHAT") {
-            // server may use SEND_CHAT for both people and room messages
+
             const d = (payload && (payload.data || payload)) || payload;
             const type = d.type || (d.data && d.data.type) || null;
             if (type === "room") {
@@ -202,7 +202,7 @@ const List = ({ setChatUser, selectedUser }) => {
                 handleSendChat({ data: d });
             }
         } else if (evt === "SEND_CHAT_TO_ROOM") {
-            // fallback if server uses a specific event
+          
             handleSendChatToRoom(payload);
         }
     }, [messages]);
@@ -212,7 +212,7 @@ const List = ({ setChatUser, selectedUser }) => {
         sendJsonMessage(SEND_CHAT(searchValue, "add friend"));
         setSearchValue("");
     };
-    // xu li nhập tên nhóm để vào
+
     const joinGroup = () => {
         if (!isReady) {
             toast({ title: "WebSocket chưa sẵn sàng", status: "error", duration: 3000 });
@@ -225,7 +225,7 @@ const List = ({ setChatUser, selectedUser }) => {
 
         sendJsonMessage(JOIN_ROOM(room));
     };
-    // xu li nhập tên nhóm để tạo
+
     const createGroup = () => {
         if (!isReady) {
                 toast({ title: "WebSocket chưa sẵn sàng", status: "error", duration: 3000 });

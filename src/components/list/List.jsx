@@ -246,6 +246,7 @@ const List = ({ setChatUser, selectedUser }) => {
         }
     }, [messages]);
 
+    // tìm và mo khung chat user
     const findFriend = () => {
         const nameFriend = searchValue.trim();
 
@@ -254,7 +255,7 @@ const List = ({ setChatUser, selectedUser }) => {
             toast({ title: "Bạn không thể thêm chính mình", status: "warning", duration: 2000 });
             return;
         }
-        const isExist = friends.find(f => f.name === nameFriend);
+        const isExist = all.find(f => f.name === nameFriend);
         console.log("friend có ton tai trong danh sach bạn bè: ", isExist)
         if (isExist) {
             handleItemClick(isExist);

@@ -67,7 +67,7 @@ function Home() {
                 toast({ title: "Join room failed", description: payload.message || "Room không tồn tại", status: "error", duration: 5000 });
                 break;
             default:
-                toast({ title: payload.event || "Error", description: payload.message || "Unknown error", status: "error", duration: 4000 });
+                // toast({ title: payload.event || "Error", description: payload.message || "Unknown error", status: "error", duration: 4000 });
                 break;
         }
     };

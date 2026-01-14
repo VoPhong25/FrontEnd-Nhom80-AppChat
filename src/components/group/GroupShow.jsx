@@ -19,12 +19,9 @@ const ShowGroup = ({ nameGroup, lastMessage, isActive, onClick }) => {
                     <div className="name">
                         <div className="info">
                             <span>{nameGroup}</span>
-                            <span></span>
-                        </div>
-
-                        <div className="text">
                             <span>Nhóm chat</span>
                         </div>
+
                         <div className="text">
                             <span>{lastMessage}</span>
                         </div>

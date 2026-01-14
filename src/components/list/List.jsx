@@ -1,9 +1,9 @@
-import { useContext, useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useToast } from "@chakra-ui/react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
 import { LogOut } from "lucide-react";
-
+import { useRef } from "react";
 import { WebSocketContext } from "../../socket/WebSocketContext";
 import {
     GET_PEOPLE_CHAT_MES,
@@ -12,15 +12,13 @@ import {
     SEND_CHAT_TO_ROOM,
     CREATE_ROOM,
     JOIN_ROOM,
-    Logout,
+    Logout, CHECK_USER_ONLINE,
 } from "../../api/action";
 
 import {
-    setFriends,
-    setGroups,
     saveMessage,
     saveGroupMess,
-    logout, clearMessages,
+    logout, clearMessages, clearGroupMessages, checkOnline, setFriends,
 } from "../../redux/userSlice";
 
 import Friend from "../friend/Friend";
@@ -34,16 +32,22 @@ const List = ({ setChatUser, selectedUser }) => {
 
     const dispatch = useDispatch();
     const navigate = useNavigate();
-    const lastIndexRef = useRef(-1);
     const toast = useToast();
 
     const user = useSelector((state) => state.user || {});
     const infor = user.infor || {};
     const friends = infor.friends || [];
     const groups = infor.groups || [];
+    const checkStatusQueue = useRef([]);
 
     //gop friend và group thanh 1 lisst chung
-    const all = [...friends, ...groups];
+    const all = [...friends, ...groups].sort((a, b) => {
+        const timeA = new Date(a.lastMessage?.time || a.actionTime || 0);
+        const timeB = new Date(b.lastMessage?.time || b.actionTime || 0);
+
+        return timeB - timeA;
+    });
+
     console.log("list user, groud: ", all)
 
     const [searchValue, setSearchValue] = useState("");
@@ -53,8 +57,37 @@ const List = ({ setChatUser, selectedUser }) => {
     const handleLogout = () => {
         if (isReady) sendJsonMessage(Logout());
         dispatch(logout());
+        toast({
+            title: "Đăng xuất thành công",
+            status: "success",
+            duration: 2000,
+        });
         navigate("/");
     };
+
+    const checkAllFriendsStatus = () => {
+        if (!isReady || all.length === 0) return;
+        checkStatusQueue.current = [];
+
+        all.forEach((friend) => {
+            if (friend.type === 0) {
+                checkStatusQueue.current.push(friend.name);
+                sendJsonMessage(CHECK_USER_ONLINE(friend.name));
+            }
+        });
+    };
+
+    //
+    useEffect(() => {
+        if (isReady && all.length > 0) {
+            checkAllFriendsStatus();
+            const intervalId = setInterval(() => {
+                checkAllFriendsStatus();
+            }, 30000);
+
+            return () => clearInterval(intervalId);
+        }
+    }, [isReady, friends.length]);
 
     //xử ly khi chọn user hoặc group để lấy tin nhanw
     const handleItemClick = (item) => {
@@ -69,15 +102,16 @@ const List = ({ setChatUser, selectedUser }) => {
     };
 
     const handleGetPeopleChatMes = (payload) => {
-    
-        if (selectedUser?.name) dispatch(clearMessages({ name: selectedUser.name }));
+        if (selectedUser?.name) {
+            dispatch(clearMessages({ name: selectedUser.name }));
+        }
+        const sorted = [...payload.data].sort(
+            (a, b) => new Date(a.createAt) - new Date(b.createAt)
+        );
 
-    
-        const list = (payload && (payload.data || payload)) || [];
-        if (!Array.isArray(list)) return;
-        const myId = infor.name || infor.email;
-        list.forEach(({ name, to, mes, createAt, createdAt }) => {
-            const isSentByUser = name === myId;
+        sorted.forEach(({ name, to, mes, createAt }) => {
+            const isSentByUser = name === infor.name;
+
             dispatch(
                 saveMessage({
                     name: isSentByUser ? to : name,
@@ -85,133 +119,165 @@ const List = ({ setChatUser, selectedUser }) => {
                         text: mes,
                         sender: name,
                         isSentByUser,
-                        createAt: createAt || createdAt,
+                        createAt
                     },
+                    isHistory: true
                 })
             );
         });
     };
 
     const handleGetRoomChatMes = (payload) => {
-    
-        const myId = infor.name || infor.email;
-        const data = (payload && (payload.data || payload)) || {};
-        const chatData = data.chatData || (data.data && data.data.chatData) || [];
-        const roomName = data.name || (data.data && data.data.name) || null;
-        if (!Array.isArray(chatData)) return;
-        chatData.forEach(({ name, mes, createAt, createdAt }) => {
+
+        const data = payload.data;
+        const roomName = data.name;
+        const chatData = data.chatData || [];
+
+        if (!roomName) return;
+        //xoa tin nhan cu trong rudux để render lai
+        dispatch(clearGroupMessages({ nameGroup: roomName }));
+        const sorted = [...chatData].sort(
+            (a, b) => new Date(a.createAt) - new Date(b.createAt)
+        );
+        sorted.forEach((msg) => {
+            const isSentByMe = msg.name === infor.name;
+
             dispatch(
                 saveGroupMess({
                     nameGroup: roomName,
                     messGroup: {
-                        text: mes,
-                        sender: name,
-                        isSentByUser: name === myId,
-                        createdAt: createAt || createdAt,
+                        text: msg.mes,
+                        sender: msg.name,
+                        createdAt: msg.createAt,
+                        isSentByUser: isSentByMe,
                     },
+                    isHistory: true,
                 })
             );
         });
     };
-
-    //xu lý gửi tin nhắn cho user (people)
     const handleSendChat = (payload) => {
-        try {
-            const d = (payload && (payload.data && (payload.data.data || payload.data))) || payload;
-            const text = d.mes || d.message || d.msg || "";
-            const from = d.from || d.name || d.sender || null;
-            const to = d.to || null;
-            const createAt = d.createAt || d.createdAt || null;
-            if (!text || !from) return;
-            // determine conversation partner: if the message is from me -> partner is 'to', else partner is 'from'
-            const myId = infor.name || infor.email;
-            const partner = from === myId ? to : from;
-            if (!partner) return;
+        const data = payload.data;
+        const isSentByMe = data.name === infor.name;
+
+        if (!isSentByMe) {
             dispatch(
                 saveMessage({
-                    name: partner,
+                    name: data.name,
                     mess: {
-                        text,
-                        sender: from,
-                        isSentByUser: from === myId,
-                        createAt,
+                        text: data.mes,
+                        sender: data.name,
+                        isSentByUser: false,
+                        createAt: data.createAt,
                     },
                 })
             );
-        } catch (e) {
-            // ignore
         }
     };
-    //xu ly gyuwir tin nhắn cho group
-        const handleSendChatToRoom = (payload) => {
-    
-            try {
-                const d = (payload && (payload.data && (payload.data.data || payload.data))) || payload;
-                const nameGroup = d.to || d.name || (payload.data && payload.data.name) || null;
-                const text = d.mes || d.message || d.msg || "";
-                const sender = d.from || d.name || d.sender || (payload.data && payload.data.from) || null;
-                const createdAt = d.createAt || d.createdAt || new Date().toISOString();
-                if (!nameGroup || !text) return;
-                const myId = infor.name || infor.email;
-                dispatch(
-                    saveGroupMess({
-                        nameGroup,
-                        messGroup: {
-                            text,
-                            sender,
-                            isSentByUser: sender === myId,
-                            createdAt,
-                        },
-                    })
-                );
-            } catch (e) {
-           
-            }
-        };
 
+    // Xử lý khi nhận được tin nhắn tư nhóm
+    const handleSendChatToRoom = (payload) => {
+
+        const data = payload.data || payload;
+
+        const isSentByMe = data.from === infor.name;
+        if (!isSentByMe) {
+            dispatch(
+                saveGroupMess({
+                    nameGroup: data.to,
+                    messGroup: {
+                        text: data.mes,
+                        sender: data.name,
+                        createdAt: data.createAt,
+                        isSentByUser: false,
+                    },
+                })
+            );
+        }
+    };
     useEffect(() => {
         if (!messages.length) return;
-        const currentIndex = messages.length - 1;
 
-      
-        if (currentIndex === lastIndexRef.current) return;
-
-        lastIndexRef.current = currentIndex;
-        const raw = messages[currentIndex];
-
-       
-        const evt = raw.event || (raw.data && raw.data.event) || (raw.action && raw.action.event);
-        const status = raw.status || (raw.data && raw.data.status) || null;
-        const payload = raw.data ? (raw.data.data || raw.data) : raw;
-
-        if (status && status !== "success") return;
+        const raw = messages[messages.length - 1];
+        const evt = raw.event || raw.data?.event;
+        const payload = raw.data ? raw : raw;
 
         if (!evt) return;
 
-        if (evt === "GET_PEOPLE_CHAT_MES") {
-            handleGetPeopleChatMes(payload);
-        } else if (evt === "GET_ROOM_CHAT_MES") {
-            handleGetRoomChatMes(payload);
-        } else if (evt === "SEND_CHAT") {
+        switch (evt) {
+            case "GET_PEOPLE_CHAT_MES":
+                handleGetPeopleChatMes(payload);
+                break;
 
-            const d = (payload && (payload.data || payload)) || payload;
-            const type = d.type || (d.data && d.data.type) || null;
-            if (type === "room") {
-                handleSendChatToRoom({ data: d });
-            } else {
-                handleSendChat({ data: d });
+            case "GET_ROOM_CHAT_MES":
+                handleGetRoomChatMes(payload);
+                break;
+
+            case "SEND_CHAT": {
+
+                const coreData = payload.data || {};
+
+                const isGroupMessage =
+                    payload.type === "room" ||
+                    coreData.type === 1 ||
+                    coreData.type === "room";
+
+                if (isGroupMessage) {
+                    handleSendChatToRoom(payload);
+                } else {
+                    handleSendChat(payload);
+                }
+                break;
             }
-        } else if (evt === "SEND_CHAT_TO_ROOM") {
-          
-            handleSendChatToRoom(payload);
+            case "CHECK_USER_ONLINE": {
+
+                const isOnline = payload.data?.status;
+                const userCheck = checkStatusQueue.current.shift();
+                if (userCheck) {
+                    dispatch(checkOnline({
+                        user: userCheck,
+                        status: isOnline
+                    }));
+                }
+                break;
+            }
+            default:
+                break;
         }
     }, [messages]);
 
+    // tìm và mo khung chat user
     const findFriend = () => {
-        if (!searchValue.trim()) return;
-        sendJsonMessage(SEND_CHAT(searchValue, "add friend"));
+        const nameFriend = searchValue.trim();
+
+        if (!nameFriend) return;
+        if (nameFriend === infor.name) {
+            toast({ title: "Bạn không thể thêm chính mình", status: "warning", duration: 2000 });
+            return;
+        }
+        const isExist = all.find(f => f.name === nameFriend);
+        console.log("friend có ton tai trong danh sach bạn bè: ", isExist)
+        if (isExist) {
+            handleItemClick(isExist);
+            setSearchValue("");
+            return;
+        }
+
+        const newFriend = {
+            name: nameFriend,
+            type: 0,
+            lastMessage: null,
+            actionTime: new Date().toISOString()
+        };
+        dispatch(setFriends({ item: newFriend }));
+
+        // mơ khung chaty
+        handleItemClick(newFriend);
+
         setSearchValue("");
+        toast({ title: `Đã thêm ${nameFriend}`, status: "success", duration: 3000 });
     };
+
 
     const joinGroup = () => {
         if (!isReady) {
@@ -225,7 +291,7 @@ const List = ({ setChatUser, selectedUser }) => {
 
         sendJsonMessage(JOIN_ROOM(room));
     };
-
+    // xu li nhập tên nhóm để tạo
     const createGroup = () => {
         if (!isReady) {
                 toast({ title: "WebSocket chưa sẵn sàng", status: "error", duration: 3000 });
@@ -289,6 +355,7 @@ const List = ({ setChatUser, selectedUser }) => {
                                     selectedUser?.type === 0 &&
                                     selectedUser?.name === item.name
                                 }
+                                isOnline={item.isOnline}
                                 onClick={() => handleItemClick(item)}
                             />
 
@@ -339,6 +406,5 @@ const List = ({ setChatUser, selectedUser }) => {
             </div>
         </div>
     );
-};
-
+    };
 export default List;

@@ -1,21 +1,29 @@
 import React from "react";
 import "./Friend.css";
 
-const Friend = ({name, time, lastMessage, isActive, onClick }) => {
+const Friend = ({ name, time, lastMessage, isActive, isOnline, onClick }) => {
+    console.log("tenn: ", name)
+    console.log("check online: ", isOnline)
     return (
         <div
             className={`friend ${isActive ? "active" : ""}`}
             onClick={onClick}
         >
+
             <div className="friendItem">
                 <div className="item">
                     <div className="img">
-                        <img src= "https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png" alt=""/>
+                        <img
+                            src="https://cdn.pixabay.com/photo/2023/02/18/11/00/icon-7797704_640.png"
+                            alt=""
+                        />
+                        {isOnline && <div className="online-dot"></div>}
+
                     </div>
+
                     <div className="name">
                         <div className="info">
                             <span>{name}</span>
-                            <span>{time}</span>
                         </div>
                         <div className="text">
                             <span>{lastMessage}</span>

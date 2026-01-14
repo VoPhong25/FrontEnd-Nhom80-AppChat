@@ -32,7 +32,7 @@ if (diffHoursNow >= 24){
     return null;
 };
 
-const formatFullDate = (date) =>
+export const formatFullDate = (date) =>
     date.toLocaleString("vi-VN", {
         weekday: "long",
         day: "2-digit",

@@ -50,19 +50,34 @@ const userSlice = createSlice({
             const { name, mess } = action.payload;
             const friend = state.infor.friends.find(f => f.name === name);
             if (!friend) return;
+            // Use provided timestamp if available, otherwise now
+            const msgTime = mess.createAt || mess.createdAt || new Date().toISOString();
 
-            const isSentByUser = mess.sender === state.infor.name;
-
-            const newMessage = {
-                text: mess.text,
-                sender: mess.sender,
-                isSentByUser,
-                time: mess.createAt,
-            };
-          friend.listmessage.push(newMessage);
-
-            friend.lastMessage = newMessage;
-
+            // prevent duplicate messages (same text + sender + recent time)
+            let exists = false;
+            try {
+                exists = (friend.listmessage || []).some(m => {
+                    const t1 = new Date(m.time || 0).getTime();
+                    const t2 = new Date(msgTime).getTime();
+                    const sameText = m.text === mess.text;
+                    const sameSender = m.sender === mess.sender;
+                    const closeTime = Math.abs(t1 - t2) < 5000; // within 5 seconds
+                    return sameText && sameSender && closeTime;
+                });
+            } catch (e) {
+                exists = false;
+            }
+            if (!exists) {
+                const myId = (state.infor && (state.infor.name || state.infor.email)) || null;
+                const newMessage = {
+                    text: mess.text,
+                    sender: mess.sender,
+                    isSentByUser: mess.sender === myId,
+                    time: msgTime,
+                };
+                friend.listmessage.push(newMessage);
+                friend.lastMessage = newMessage;
+            }
         },
 
         setGroups(state, action) {
@@ -91,17 +106,31 @@ const userSlice = createSlice({
             const { nameGroup, messGroup } = action.payload;
             const group = state.infor.groups.find(g => g.nameGroup === nameGroup);
             if (!group) return;
-
-            const newMessage = {
-                text: messGroup.text,
-                sender: messGroup.sender,
-                isSentByUser: messGroup.isSentByUser,
-                time: messGroup.createdAt,
-            };
-
-            group.listmessage.push(newMessage);
-            group.lastMessage = newMessage;
-
+            // dedupe: avoid pushing duplicate messages (same text + sender + recent time)
+            const msgTime = messGroup.createdAt || messGroup.time || new Date().toISOString();
+            let exists = false;
+            try {
+                exists = (group.listmessage || []).some(m => {
+                    const t1 = new Date(m.time || 0).getTime();
+                    const t2 = new Date(msgTime).getTime();
+                    const sameText = m.text === messGroup.text;
+                    const sameSender = m.sender === messGroup.sender;
+                    const closeTime = Math.abs(t1 - t2) < 5000; // within 5 seconds
+                    return sameText && sameSender && closeTime;
+                });
+            } catch (e) {
+                exists = false;
+            }
+            if (!exists) {
+                const newMessage = {
+                    text: messGroup.text,
+                    sender: messGroup.sender,
+                    isSentByUser: !!messGroup.isSentByUser,
+                    time: msgTime,
+                };
+                group.listmessage.push(newMessage);
+                group.lastMessage = newMessage;
+            }
         },
 
         clearMessages(state, action) {

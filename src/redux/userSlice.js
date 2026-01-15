@@ -50,10 +50,23 @@ const userSlice = createSlice({
             const { name, mess, isHistory } = action.payload;
             const friends = state.infor.friends;
 
-            const index = friends.findIndex(f => f.name === name);
+            let index = friends.findIndex(f => f.name === name);
             if (index === -1) return;
 
             const friend = friends[index];
+
+            if (index === -1) {
+                const newFriend = {
+                    name: name,
+                    type: 0,
+                    actionTime: mess.createAt || new Date().toISOString(),
+                    listmessage: [],
+                    lastMessage: null,
+                    isOnline: true
+                };
+                friends.push(newFriend);
+                index = friends.length - 1;
+            }
 
             const newMessage = {
                 text: mess.text,

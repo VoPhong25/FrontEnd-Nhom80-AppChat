@@ -12,7 +12,7 @@ import {
     SEND_CHAT_TO_ROOM,
     CREATE_ROOM,
     JOIN_ROOM,
-    Logout, CHECK_USER_ONLINE,
+    Logout, CHECK_USER_ONLINE, CHECK_USER_EXIST,
 } from "../../api/action";
 
 import {
@@ -159,7 +159,7 @@ const List = ({ setChatUser, selectedUser }) => {
     const handleSendChat = (payload) => {
         const data = payload.data;
         const isSentByMe = data.name === infor.name;
-
+        const messageTime = data.createAt || new Date().toISOString()
         if (!isSentByMe) {
             dispatch(
                 saveMessage({
@@ -168,7 +168,7 @@ const List = ({ setChatUser, selectedUser }) => {
                         text: data.mes,
                         sender: data.name,
                         isSentByUser: false,
-                        createAt: data.createAt,
+                        createAt: messageTime,
                     },
                 })
             );
@@ -195,6 +195,31 @@ const List = ({ setChatUser, selectedUser }) => {
             );
         }
     };
+    //gửi request lên server
+    const checkUserExist = (name) => {
+        sendJsonMessage(CHECK_USER_EXIST(name));
+        console.log("name check usser exist: ", name)
+    }
+    //kiem tra neu user có ton tai thì setFriend
+    const handleCheckUserExist = (payload) => {
+        const nameFriend = searchValue.trim();
+        if(payload.data.status) {
+            const newFriend = {
+                name: nameFriend,
+                type: 0,
+                lastMessage: null,
+                actionTime: new Date().toISOString()
+            };
+            dispatch(setFriends({item: newFriend}));
+            // mơ khung chaty
+            handleItemClick(newFriend);
+            toast({title: `Đã thêm ${nameFriend}`, status: "success", duration: 3000});
+        } else {
+            toast({title: `Người dùng ${nameFriend} không tồn tại!!! `, status: "warning", duration: 3000});
+        }
+        setSearchValue("");
+    }
+
     useEffect(() => {
         if (!messages.length) return;
 
@@ -241,6 +266,10 @@ const List = ({ setChatUser, selectedUser }) => {
                 }
                 break;
             }
+            case "CHECK_USER_EXIST":
+                handleCheckUserExist(payload);
+                break;
+
             default:
                 break;
         }
@@ -250,34 +279,24 @@ const List = ({ setChatUser, selectedUser }) => {
     const findFriend = () => {
         const nameFriend = searchValue.trim();
 
-        if (!nameFriend) return;
+        console.log("name search: ", nameFriend)
+        if (!nameFriend){
+            toast({title: "Bạn cần nhập tên!!", status: "warning", duration: 2000});
+        return;
+    }
         if (nameFriend === infor.name) {
             toast({ title: "Bạn không thể thêm chính mình", status: "warning", duration: 2000 });
             return;
         }
-        const isExist = all.find(f => f.name === nameFriend);
+        const isExist = all.find(f => f.name === nameFriend) || all.find(f => f.nameGroup === nameFriend);
         console.log("friend có ton tai trong danh sach bạn bè: ", isExist)
         if (isExist) {
             handleItemClick(isExist);
             setSearchValue("");
             return;
         }
-
-        const newFriend = {
-            name: nameFriend,
-            type: 0,
-            lastMessage: null,
-            actionTime: new Date().toISOString()
-        };
-        dispatch(setFriends({ item: newFriend }));
-
-        // mơ khung chaty
-        handleItemClick(newFriend);
-
-        setSearchValue("");
-        toast({ title: `Đã thêm ${nameFriend}`, status: "success", duration: 3000 });
+        checkUserExist(nameFriend)
     };
-
 
     const joinGroup = () => {
         if (!isReady) {

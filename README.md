@@ -7,6 +7,7 @@
 git clone [https://github.com/VoPhong25/FrontEnd-Nhom80-AppChat.git]
 ### **Bước 2: Cài đặt thư viện**
 npm install
+
 # Các gói chính bao gồm:
 npm install react-router-dom
 npm install @reduxjs/toolkit react-redux redux-persist react-use-websocket

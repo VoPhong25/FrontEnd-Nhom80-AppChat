@@ -50,3 +50,6 @@ npm install emoji-picker-react
 ```bash
 npm run dev
 ```
+
+****Phân chia công việc****
+[LINK PHÂN CHIA VIỆC](https://docs.google.com/spreadsheets/d/1N1TqtFe2-m1Wga-hbV_QiZLtWuDZcyY0PT8G7QduR5U/edit?usp=sharing)

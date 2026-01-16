@@ -89,18 +89,68 @@ const List = ({ setChatUser, selectedUser }) => {
         }
     }, [isReady, friends.length]);
 
-    //xử ly khi chọn user hoặc group để lấy tin nhanw
+    // //xử ly khi chọn user hoặc group để lấy tin nhanw
+    // const handleItemClick = (item) => {
+    //     if (item.type === 0) {
+    //         sendJsonMessage(GET_PEOPLE_CHAT_MES(item.name));
+    //         setExpandedGroup(null);
+    //     } else {
+    //         sendJsonMessage(GET_ROOM_CHAT_MES(item.nameGroup));
+    //         setExpandedGroup(item.nameGroup);
+    //     }
+    //     setChatUser(item);
+    // };
+// Xử lý khi chọn user hoặc group để lấy tin nhắn
     const handleItemClick = (item) => {
+        // CASE 1: Click vào User (Bạn bè)
         if (item.type === 0) {
             sendJsonMessage(GET_PEOPLE_CHAT_MES(item.name));
             setExpandedGroup(null);
-        } else {
-            sendJsonMessage(GET_ROOM_CHAT_MES(item.nameGroup));
-            setExpandedGroup(item.nameGroup);
-        }
-        setChatUser(item);
-    };
+            setChatUser(item);
+        } 
+        // CASE 2: Click vào Group (Nhóm)
+        else {
+            // Kiểm tra xem user hiện tại đã tham gia nhóm này chưa
+            // (So sánh tên nhóm được click với danh sách nhóm trong Redux)
+            const isJoined = groups.some(g => g.nameGroup === item.nameGroup);
 
+            if (isJoined) {
+                // Nếu đã tham gia: Lấy tin nhắn và hiển thị bình thường
+                sendJsonMessage(GET_ROOM_CHAT_MES(item.nameGroup));
+                
+                // Toggle mở/đóng danh sách thành viên (nếu cần)
+                setExpandedGroup(prev => (prev === item.nameGroup ? null : item.nameGroup));
+                
+                setChatUser(item);
+            } else {
+                // Nếu chưa tham gia: Yêu cầu Join
+                const confirmJoin = window.confirm(
+                    `Bạn chưa là thành viên của nhóm "${item.nameGroup}". Bạn có muốn tham gia ngay không?`
+                );
+
+                if (confirmJoin) {
+                    if (isReady) {
+                        sendJsonMessage(JOIN_ROOM(item.nameGroup));
+                        toast({
+                            title: "Đang tham gia nhóm...",
+                            status: "info",
+                            duration: 2000,
+                        });
+                        // Tùy chọn: Có thể setChatUser luôn để người dùng thấy giao diện ngay
+                        // setChatUser(item); 
+                    } else {
+                        toast({
+                            title: "Lỗi kết nối",
+                            description: "WebSocket chưa sẵn sàng",
+                            status: "error",
+                            duration: 3000,
+                        });
+                    }
+                }
+                // Nếu chọn Cancel thì không làm gì cả (không load tin nhắn)
+            }
+        }
+    };
     const handleGetPeopleChatMes = (payload) => {
         if (selectedUser?.name) {
             dispatch(clearMessages({ name: selectedUser.name }));
